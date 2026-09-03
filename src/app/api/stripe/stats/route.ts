@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/api-auth";
 import { stripe } from "@/lib/stripe";
 import { extractSalonName, parseSalonFromDescription } from "@/lib/salon";
 
@@ -24,6 +25,8 @@ function getSalonName(customer: ExpandedCustomer | null, billingName?: string | 
 }
 
 export async function GET() {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
   try {
     const [subscriptions, charges, customers] = await Promise.all([
       stripe.subscriptions.list({ limit: 100, status: "all" }),

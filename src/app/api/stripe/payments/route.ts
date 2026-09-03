@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/api-auth";
 import { stripe } from "@/lib/stripe";
 import { extractSalonName, parseSalonFromDescription } from "@/lib/salon";
 
@@ -11,6 +12,8 @@ type ExpandedCustomer = {
 };
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "50");

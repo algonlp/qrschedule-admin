@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/api-auth";
 import { stripe } from "@/lib/stripe";
+import { safeErrorResponse } from "@/lib/http";
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const email = searchParams.get("email") || "infoalgonlp@gmail.com";
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
 
+  const { searchParams } = new URL(request.url);
+  const email = searchParams.get("email")?.trim();
+  if (!email) {
+    return NextResponse.json(
+      { error: "Pass ?email=<customer email> to inspect a specific customer." },
+      { status: 400 },
+    );
+  }
+
+  try {
     const customers = await stripe.customers.list({ email, limit: 5 });
 
     const results = await Promise.all(
@@ -78,6 +89,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ results }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return safeErrorResponse("stripe/debug", error);
   }
 }

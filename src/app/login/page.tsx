@@ -53,7 +53,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Welcome back</h2>
-            <p className="text-gray-500 text-sm mt-1">Sign in to manage your subscriptions</p>
+            <p className="text-fg-subtle text-sm mt-1">Sign in to manage your subscriptions</p>
           </div>
 
           {error && (
@@ -73,7 +73,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/30 focus:border-transparent outline-none transition text-gray-900"
                 placeholder="admin@qrschedule.com"
               />
             </div>
@@ -88,7 +88,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/30 focus:border-transparent outline-none transition text-gray-900"
                 placeholder="Enter your password"
               />
             </div>

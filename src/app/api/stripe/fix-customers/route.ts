@@ -1,10 +1,34 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/api-auth";
 import { stripe } from "@/lib/stripe";
 import { parseSalonFromDescription } from "@/lib/salon";
+import { writeAuditLog } from "@/lib/audit";
+import { safeErrorResponse } from "@/lib/http";
 
-export async function POST() {
+/**
+ * Maintenance: backfill `businessName` (and `businessId` when found) onto Stripe
+ * customer metadata by scanning their checkout sessions / subscriptions.
+ *
+ * Safe by default: with no body (or `{ "apply": false }`) this is a DRY RUN -
+ * it reports what it WOULD change and writes nothing to Stripe. Pass
+ * `{ "apply": true }` to actually update customer metadata; that path is
+ * audit-logged.
+ */
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
+
+  let apply = false;
   try {
-    let fixed = 0;
+    const body = await request.json().catch(() => ({}));
+    apply = body?.apply === true;
+  } catch {
+    apply = false;
+  }
+
+  try {
+    const planned: { customerId: string; businessName: string; businessId: string | null }[] = [];
+    let scanned = 0;
     let hasMore = true;
     let startingAfter: string | undefined;
 
@@ -15,6 +39,7 @@ export async function POST() {
       });
 
       for (const cust of customers.data) {
+        scanned++;
         if (cust.metadata?.businessName) continue;
 
         let businessName: string | null = null;
@@ -32,15 +57,10 @@ export async function POST() {
             businessId = session.metadata.businessId || null;
             break;
           }
+          if (session.metadata?.businessId) businessId = session.metadata.businessId;
 
-          if (session.metadata?.businessId) {
-            businessId = session.metadata.businessId;
-          }
-
-          const lineItems = session.line_items?.data || [];
-          for (const item of lineItems) {
-            const productName = item.description || "";
-            const parsed = parseSalonFromDescription(productName);
+          for (const item of session.line_items?.data || []) {
+            const parsed = parseSalonFromDescription(item.description || "");
             if (parsed) {
               businessName = parsed;
               break;
@@ -50,12 +70,7 @@ export async function POST() {
         }
 
         if (!businessName) {
-          const subs = await stripe.subscriptions.list({
-            customer: cust.id,
-            limit: 5,
-            status: "all",
-          });
-
+          const subs = await stripe.subscriptions.list({ customer: cust.id, limit: 5, status: "all" });
           for (const sub of subs.data) {
             if (sub.metadata?.businessName) {
               businessName = sub.metadata.businessName;
@@ -72,26 +87,42 @@ export async function POST() {
         }
 
         if (businessName) {
-          await stripe.customers.update(cust.id, {
-            metadata: {
-              ...cust.metadata,
-              ...(businessId ? { businessId } : {}),
-              businessName,
-            },
-          });
-          fixed++;
+          planned.push({ customerId: cust.id, businessName, businessId });
+          if (apply) {
+            await stripe.customers.update(cust.id, {
+              metadata: {
+                ...cust.metadata,
+                ...(businessId ? { businessId } : {}),
+                businessName,
+              },
+            });
+          }
         }
       }
 
       hasMore = customers.has_more;
-      if (customers.data.length > 0) {
-        startingAfter = customers.data[customers.data.length - 1].id;
-      }
+      if (customers.data.length > 0) startingAfter = customers.data[customers.data.length - 1].id;
     }
 
-    return NextResponse.json({ success: true, fixedCustomers: fixed });
+    if (apply && planned.length > 0) {
+      await writeAuditLog({
+        actor: auth.email,
+        action: "stripe.customers.backfill_metadata",
+        entityType: "stripe_customer",
+        entityId: `${planned.length} customers`,
+        summary: `Backfilled businessName on ${planned.length} Stripe customer(s) (scanned ${scanned})`,
+        after: planned,
+      });
+    }
+
+    return NextResponse.json({
+      dryRun: !apply,
+      scanned,
+      matched: planned.length,
+      updated: apply ? planned.length : 0,
+      customers: planned,
+    });
   } catch (error) {
-    console.error("Fix customers error:", error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return safeErrorResponse("stripe/fix-customers", error);
   }
 }

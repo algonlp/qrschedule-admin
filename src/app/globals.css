@@ -1,21 +1,163 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   QR Schedule Admin — design tokens
+   Light palette on :root, dark overrides on .dark (toggled on <html> by the
+   inline theme script in layout.tsx). `@theme inline` maps each token to a
+   Tailwind utility that reads the CSS var at runtime, so theme switching works
+   without a rebuild. Warm-tinted neutrals + an indigo primary give the panel
+   its own identity rather than a stock slate/blue admin template.
+--------------------------------------------------------------------------- */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --bg: #f6f6f7;
+  --surface: #ffffff;
+  --surface-2: #f1f1f3;
+  --surface-hover: #ececef;
+  --border: #e6e6e9;
+  --border-strong: #d7d7dc;
+
+  --fg: #191921;
+  --fg-muted: #5f606b;
+  --fg-subtle: #94949f;
+
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-fg: #ffffff;
+  --primary-soft: #eef0fe;
+  --ring: #4f46e5;
+
+  --success: #0f7a4e;
+  --success-soft: #e5f2ec;
+  --warning: #9a6112;
+  --warning-soft: #f6eddc;
+  --danger: #c8362f;
+  --danger-soft: #f8e9e8;
+  --info: #0a6aa8;
+  --info-soft: #e5f0f8;
+
+  --shadow-xs: 0 1px 2px rgba(20, 20, 30, 0.05);
+  --shadow-sm: 0 1px 2px rgba(20, 20, 30, 0.05), 0 2px 6px -2px rgba(20, 20, 30, 0.08);
+  --shadow-md: 0 2px 4px rgba(20, 20, 30, 0.05), 0 12px 28px -8px rgba(20, 20, 30, 0.16);
+  --shadow-pop: 0 8px 30px -8px rgba(20, 20, 30, 0.22);
+
+  --background: var(--bg);
+  --foreground: var(--fg);
+}
+
+.dark {
+  --bg: #0c0c0f;
+  --surface: #17171b;
+  --surface-2: #1e1e23;
+  --surface-hover: #24242a;
+  --border: #2a2a30;
+  --border-strong: #3a3a42;
+
+  --fg: #ededf0;
+  --fg-muted: #a2a2ad;
+  --fg-subtle: #6d6d78;
+
+  --primary: #7c74f0;
+  --primary-hover: #8f88f3;
+  --primary-fg: #0c0c0f;
+  --primary-soft: #201f34;
+  --ring: #7c74f0;
+
+  --success: #4fbb92;
+  --success-soft: #10251c;
+  --warning: #e9b45f;
+  --warning-soft: #2c2416;
+  --danger: #f0918a;
+  --danger-soft: #2e1a19;
+  --info: #6fb6e6;
+  --info-soft: #16242e;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 6px -2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 12px 28px -8px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 8px 30px -8px rgba(0, 0, 0, 0.7);
+
+  --background: var(--bg);
+  --foreground: var(--fg);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  /* legacy aliases so any not-yet-migrated markup keeps resolving */
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+}
+
+* {
+  border-color: var(--border);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+/* Focus ring — one consistent style for every interactive element */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Thin, theme-aware scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 @keyframes spin {
@@ -23,7 +165,59 @@ body {
     transform: rotate(360deg);
   }
 }
-
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+@keyframes qs-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes qs-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes qs-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes qs-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.qs-animate-in {
+  animation: qs-fade-in 0.16s ease-out;
+}
+.qs-animate-scale {
+  animation: qs-scale-in 0.14s ease-out;
+}
+.qs-animate-drawer {
+  animation: qs-slide-in-right 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

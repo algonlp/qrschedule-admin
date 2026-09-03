@@ -6,16 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
+    "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
     "cookie": "^1.1.1",
+    "jose": "^6.2.10",
     "jsonwebtoken": "^9.0.3",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.9.0",
     "stripe": "^22.2.3",
     "twilio": "^6.0.2"
   },
@@ -29,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

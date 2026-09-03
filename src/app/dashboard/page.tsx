@@ -1,6 +1,28 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard, SectionCard } from "@/components/ui/Card";
+import { SkeletonStats, ErrorCard, EmptyState } from "@/components/ui/feedback";
+import { Table, THead, TH, TBody, TR, TD } from "@/components/ui/DataTable";
+import { StatusBadge } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/Icon";
+import { cn } from "@/components/ui/utils";
 
 type Stats = {
   totalRevenue: number;
@@ -16,199 +38,306 @@ type Stats = {
     status: string;
     salonName: string;
     customerEmail: string;
-    customerName: string;
     created: string;
     receiptUrl: string | null;
-    failureCode: string | null;
     failureMessage: string | null;
   }[];
 };
 
+type Analytics = {
+  revenueChart: { month: string; label: string; revenue: number; bookings: number; newSalons: number }[];
+  dailyBookings: { date: string; label: string; bookings: number }[];
+  topSalons: { id: string; name: string; count: number; revenue: number }[];
+  statusDistribution: { name: string; value: number }[];
+  totals: { totalSalons: number; activeSalons: number; totalAppointments: number; totalRevenue: number };
+};
+
+const CHART = { revenue: "#4f46e5", bookings: "#0ea5e9", bar: "#4f46e5" };
+const PIE_COLORS = ["#4f46e5", "#0f9d68", "#dc2626", "#d97706", "#7c3aed", "#db2777"];
+const GRID = "rgba(120,120,135,0.18)";
+const AXIS = "rgba(120,120,135,0.7)";
+
+function relativeTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff)) return "";
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.round(days / 30)}mo ago`;
+}
+
+const tooltipStyle = {
+  borderRadius: "10px",
+  border: "1px solid var(--border)",
+  background: "var(--surface)",
+  color: "var(--fg)",
+  fontSize: "12px",
+  boxShadow: "var(--shadow-md)",
+};
+
 export default function DashboardOverview() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/stripe/stats")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setStats(data);
-        }
+  function load() {
+    Promise.all([
+      fetch("/api/stripe/stats").then((r) => r.json()),
+      fetch("/api/supabase/analytics").then((r) => r.json()),
+    ])
+      .then(([stripeData, analyticsData]) => {
+        if (stripeData.error) setError(stripeData.error);
+        else setStats(stripeData);
+        if (!analyticsData.error) setAnalytics(analyticsData);
       })
       .catch(() => setError("Failed to load dashboard"))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <p className="text-red-700 font-medium">{error}</p>
-        <p className="text-red-500 text-sm mt-2">Check your Stripe API key in .env.local</p>
-      </div>
-    );
-  }
-
-  if (!stats) return null;
-
-  const cards = [
-    {
-      title: "Total Revenue",
-      value: `$${stats.totalRevenue.toLocaleString()}`,
-      sub: `$${stats.monthlyRevenue.toLocaleString()} this month`,
-      iconBg: "bg-emerald-100",
-      icon: (
-        <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-    },
-    {
-      title: "Active Subscriptions",
-      value: stats.activeSubscriptions.toString(),
-      sub: `${stats.totalCharges} total charges`,
-      iconBg: "bg-blue-100",
-      icon: (
-        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-        </svg>
-      ),
-    },
-    {
-      title: "Total Salons",
-      value: stats.totalCustomers.toString(),
-      sub: "Registered on Stripe",
-      iconBg: "bg-purple-100",
-      icon: (
-        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      ),
-    },
-    {
-      title: "Failed Payments",
-      value: stats.failedPayments.toString(),
-      sub: "Needs attention",
-      iconBg: "bg-red-100",
-      icon: (
-        <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-        </svg>
-      ),
-    },
-  ];
+  const money = (n: number, c = "USD") =>
+    `${c === "USD" ? "$" : c.toUpperCase() + " "}${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {cards.map((card) => (
-          <div key={card.title} className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">{card.title}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
-                <p className="text-xs text-gray-400 mt-1">{card.sub}</p>
-              </div>
-              <div className={`p-2.5 rounded-lg ${card.iconBg}`}>{card.icon}</div>
-            </div>
+    <div className="space-y-5">
+      <PageHeader title="Overview" description="QR Schedule platform health at a glance." />
+
+      {loading ? (
+        <SkeletonStats count={4} />
+      ) : error ? (
+        <ErrorCard message={error} onRetry={() => { setError(""); setLoading(true); load(); }} />
+      ) : stats ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard
+              label="Total revenue"
+              value={money(stats.totalRevenue)}
+              icon="payments"
+              accent="success"
+              hint={`${money(stats.monthlyRevenue)} this month`}
+            />
+            <StatCard
+              label="Active subscriptions"
+              value={stats.activeSubscriptions.toLocaleString()}
+              icon="subscriptions"
+              hint={`${stats.totalCharges} total charges`}
+            />
+            <StatCard
+              label="Salons"
+              value={(analytics?.totals.totalSalons ?? stats.totalCustomers).toLocaleString()}
+              icon="salons"
+              hint={`${analytics?.totals.activeSalons ?? 0} active`}
+            />
+            <StatCard
+              label="Bookings"
+              value={(analytics?.totals.totalAppointments ?? 0).toLocaleString()}
+              icon="bookings"
+              accent={stats.failedPayments > 0 ? "warning" : "primary"}
+              hint={`${money(analytics?.totals.totalRevenue ?? 0, "PKR")} booking revenue`}
+            />
           </div>
-        ))}
-      </div>
 
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Recent Payments</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-500 uppercase px-5 py-3">Salon</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase px-5 py-3">Amount</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase px-5 py-3">Status</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase px-5 py-3">Date</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase px-5 py-3">Receipt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.recentPayments.map((payment) => (
-                <tr
-                  key={payment.id}
-                  className={`border-b border-gray-50 hover:bg-gray-50 ${payment.status === "failed" ? "bg-red-50/50" : ""}`}
+          {analytics && (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <SectionCard title="Revenue & bookings trend" bodyClassName="p-4">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={analytics.revenueChart}>
+                      <defs>
+                        <linearGradient id="gRev" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={CHART.revenue} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={CHART.revenue} stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gBook" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={CHART.bookings} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={CHART.bookings} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: AXIS }} stroke={GRID} />
+                      <YAxis yAxisId="l" tick={{ fontSize: 11, fill: AXIS }} stroke={GRID} width={38} />
+                      <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: AXIS }} stroke={GRID} width={30} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Area yAxisId="l" type="monotone" dataKey="revenue" name="Revenue" stroke={CHART.revenue} strokeWidth={2} fill="url(#gRev)" />
+                      <Area yAxisId="r" type="monotone" dataKey="bookings" name="Bookings" stroke={CHART.bookings} strokeWidth={2} fill="url(#gBook)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </SectionCard>
+
+                <SectionCard title="Daily bookings" description="Last 30 days" bodyClassName="p-4">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={analytics.dailyBookings}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: AXIS }} stroke={GRID} interval={4} />
+                      <YAxis tick={{ fontSize: 11, fill: AXIS }} stroke={GRID} allowDecimals={false} width={28} />
+                      <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(120,120,135,0.08)" }} />
+                      <Bar dataKey="bookings" name="Bookings" fill={CHART.bar} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </SectionCard>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <SectionCard
+                  title="Top performing salons"
+                  description="Ranked by total bookings"
+                  className="lg:col-span-2"
+                  bodyClassName="p-2"
                 >
-                  <td className="px-5 py-3">
-                    <p className="text-sm font-semibold text-gray-900">{payment.salonName}</p>
-                    <p className="text-xs text-gray-500">{payment.customerEmail}</p>
-                  </td>
-                  <td className="px-5 py-3 text-sm font-semibold text-gray-900">
-                    ${payment.amount.toFixed(2)} {payment.currency.toUpperCase()}
-                  </td>
-                  <td className="px-5 py-3">
-                    <StatusBadge status={payment.status} />
-                    {payment.failureMessage && (
-                      <p className="text-xs text-red-500 mt-1">{payment.failureMessage}</p>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-sm text-gray-600">
-                    {new Date(payment.created).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="px-5 py-3">
-                    {payment.receiptUrl ? (
-                      <a
-                        href={payment.receiptUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        View
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {stats.recentPayments.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-gray-400">
-                    No payments yet
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  {analytics.topSalons.length === 0 ? (
+                    <EmptyState icon="salons" title="No salon data yet" />
+                  ) : (
+                    <ol className="divide-y divide-border">
+                      {analytics.topSalons.map((s, i) => {
+                        const rankStyle =
+                          i === 0
+                            ? "bg-warning-soft text-warning"
+                            : i === 1
+                              ? "bg-surface-2 text-fg-muted"
+                              : i === 2
+                                ? "bg-primary-soft text-primary"
+                                : "bg-transparent text-fg-subtle";
+                        return (
+                          <li key={s.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-hover/60">
+                            <span className={cn("w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold tabular-nums shrink-0", rankStyle)}>
+                              {i + 1}
+                            </span>
+                            <div className="w-8 h-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                              {s.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-fg truncate">{s.name}</p>
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <div className="h-1.5 flex-1 rounded-full bg-surface-2 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-primary"
+                                    style={{ width: `${(s.count / (analytics.topSalons[0]?.count || 1)) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-fg-subtle shrink-0 tabular-nums">{s.count}</span>
+                              </div>
+                            </div>
+                            <span className="text-sm font-semibold text-success shrink-0 tabular-nums">
+                              PKR {s.revenue.toLocaleString()}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                </SectionCard>
+
+                <SectionCard title="Booking status" bodyClassName="p-4">
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie data={analytics.statusDistribution} cx="50%" cy="50%" innerRadius={46} outerRadius={72} paddingAngle={3} dataKey="value">
+                        {analytics.statusDistribution.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="var(--surface)" strokeWidth={2} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-1.5 mt-3">
+                    {analytics.statusDistribution.map((item, i) => (
+                      <div key={item.name} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2 text-fg-muted capitalize">
+                          <span className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          {item.name}
+                        </span>
+                        <span className="font-semibold text-fg tabular-nums">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </SectionCard>
+              </div>
+            </>
+          )}
+
+          <SectionCard
+            title="Recent payments"
+            description={`Latest ${stats.recentPayments.length} transaction${stats.recentPayments.length === 1 ? "" : "s"} across all salons`}
+            action={
+              <Link
+                href="/dashboard/payments"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                View all
+                <Icon name="chevron-right" className="w-3.5 h-3.5" />
+              </Link>
+            }
+            bodyClassName="p-0"
+          >
+            {stats.recentPayments.length === 0 ? (
+              <EmptyState icon="payments" title="No payments yet" />
+            ) : (
+              <Table>
+                <THead>
+                  <TH>Salon</TH>
+                  <TH align="right">Amount</TH>
+                  <TH>Status</TH>
+                  <TH align="right">Date</TH>
+                  <TH align="right">Receipt</TH>
+                </THead>
+                <TBody>
+                  {stats.recentPayments.map((p) => (
+                    <TR key={p.id}>
+                      <TD>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                            {p.salonName.charAt(0).toUpperCase() || "?"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-fg truncate">{p.salonName}</p>
+                            <p className="text-xs text-fg-subtle truncate">{p.customerEmail}</p>
+                          </div>
+                        </div>
+                      </TD>
+                      <TD align="right">
+                        <span className="text-sm font-semibold text-fg tabular-nums">${p.amount.toFixed(2)}</span>
+                        <span className="text-xs text-fg-subtle ml-1">{p.currency.toUpperCase()}</span>
+                      </TD>
+                      <TD>
+                        <StatusBadge status={p.status} dot />
+                        {p.failureMessage && <p className="text-xs text-danger mt-1 max-w-[16rem]">{p.failureMessage}</p>}
+                      </TD>
+                      <TD align="right" className="whitespace-nowrap">
+                        <span className="text-sm text-fg-muted">{relativeTime(p.created)}</span>
+                        <p className="text-xs text-fg-subtle">
+                          {new Date(p.created).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </TD>
+                      <TD align="right">
+                        {p.receiptUrl ? (
+                          <a
+                            href={p.receiptUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline text-xs font-medium"
+                          >
+                            Receipt
+                            <Icon name="external" className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <span className="text-fg-subtle">—</span>
+                        )}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </SectionCard>
+        </>
+      ) : null}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    succeeded: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    failed: "bg-red-50 text-red-700 border-red-200",
-    pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    refunded: "bg-gray-50 text-gray-600 border-gray-200",
-  };
-
-  return (
-    <span className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full border ${styles[status] || styles.pending}`}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
   );
 }
